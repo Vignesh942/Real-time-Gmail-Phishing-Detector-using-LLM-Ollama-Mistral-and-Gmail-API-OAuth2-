@@ -19,8 +19,20 @@ it reads the latest Primary unread email, runs fast heuristics, queries the LLM 
 
 ---
 ## Tech Stack
--Python 3.10+
--Ollama (running Mistral or Dolphin-Mistral model)
--Google Gmail API (OAuth 2.0)
--Pandas for structured logging
--Regex-based heuristic engine
+- Python 3.10+
+- Ollama (running Mistral or Dolphin-Mistral model)
+- Google Gmail API (OAuth 2.0)
+- Pandas for structured logging
+- Regex-based heuristic engine
+
+## How It Works
+- Authenticate to Gmail via OAuth2.
+- Fetch the latest unread message from the Primary tab.
+- Parse subject, sender, and email body.
+- Analyze using a heuristic model (keywords, URLs, urgency).
+- Send summary to Ollama’s local Mistral model for AI classification.
+- Combine results → final label: 🟢 Safe or 🔴 Phishing.
+- Mark email as processed and log results into gmail_phish_log.csv.
+
+---
+
