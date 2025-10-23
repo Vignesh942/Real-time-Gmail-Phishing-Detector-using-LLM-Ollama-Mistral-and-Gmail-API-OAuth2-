@@ -1,38 +1,43 @@
-# Real-time-Gmail-Phishing-Detector-using-LLM-Ollama-Mistral-and-Gmail-API-OAuth2-
+#  Gmail Ollama Phishing Detector  
+### Real-time Gmail Phishing Detection using LLM (Ollama Mistral + Gmail API OAuth2)
 
-# Gmail Ollama Phishing Detector
-
-**Gmail Ollama Phishing Detector** — a local, privacy-preserving phishing detection that integrates Gmail (via API) with a local LLM (`dolphin-mistral`) running through Ollama.  
-it reads the latest Primary unread email, runs fast heuristics, queries the LLM only when suspicious, and logs results.
-
-> ⚠️ **Security note:** This repo contains no credentials. Do **not** commit `credentials.json` or `token.pickle`. Use `credentials.example.json` as a template.
+> ⚡ A **local, privacy-first phishing detector** that connects to Gmail using OAuth2, scans unread emails, and classifies them as **Safe** or **Phishing** using a hybrid of **Heuristic + Local LLM (Ollama Mistral)**.
 
 ---
 
-## Features
-- Fetches the **latest unread email from Gmail Primary** tab (OAuth)
-- Fast **heuristic short-circuit** to avoid unnecessary LLM calls
-- Local LLM inference using **Ollama + dolphin-mistral** (no cloud API keys)
-- Marks processed emails (removes `UNREAD`, adds label)
-- CSV logging for analysis
-- Demo-friendly: quick setup for recruiters/interviewers
+##  Features
+
+- 📥 Fetches the **latest unread email** from Gmail (Primary tab)  
+- ⚙️ **Heuristic pre-checks** to avoid unnecessary LLM calls  
+- 🤖 **Local AI inference** using **Ollama + Dolphin-Mistral**  
+- 📨 Automatically labels processed emails (`Processed-By-Ollama`)  
+- 🧾 Logs all detections in `gmail_phish_log.csv`  
+- 🔒 **Fully offline** – no cloud or third-party API calls  
 
 ---
-## Tech Stack
-- Python 3.10+
-- Ollama (running Mistral or Dolphin-Mistral model)
-- Google Gmail API (OAuth 2.0)
-- Pandas for structured logging
-- Regex-based heuristic engine
 
-## How It Works
-- Authenticate to Gmail via OAuth2.
-- Fetch the latest unread message from the Primary tab.
-- Parse subject, sender, and email body.
-- Analyze using a heuristic model (keywords, URLs, urgency).
-- Send summary to Ollama’s local Mistral model for AI classification.
-- Combine results → final label: 🟢 Safe or 🔴 Phishing.
-- Mark email as processed and log results into gmail_phish_log.csv.
+##  Tech Stack
+
+| Component | Technology |
+|------------|-------------|
+| Language | Python 3.10+ |
+| AI Model | Ollama (Dolphin-Mistral) |
+| API | Gmail API (OAuth 2.0) |
+| Libraries | `google-api-python-client`, `ollama`, `pandas`, `re`, `email` |
 
 ---
+
+##  How It Works
+
+1. Authenticate your Gmail via OAuth2  
+2. Fetch the latest unread message from the **Primary tab**  
+3. Parse subject, sender, and email body  
+4. Run **heuristic checks** (keywords, URLs, urgency, tone)  
+5. If suspicious → send summary to **Ollama Mistral** for LLM analysis  
+6. Combine both results → 🟢 *Safe* or 🔴 *Phishing*  
+7. Mark processed emails and log everything into `gmail_phish_log.csv`  
+
+---
+
+## 🧾 Example Output
 
