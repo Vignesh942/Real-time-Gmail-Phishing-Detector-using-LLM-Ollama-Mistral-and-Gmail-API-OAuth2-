@@ -1,7 +1,7 @@
 #  Gmail Ollama Phishing Detector  
 ### Real-time Gmail Phishing Detection using LLM (Ollama Mistral + Gmail API OAuth2)
 
-> ⚡ A **local, privacy-first phishing detector** that connects to Gmail using OAuth2, scans unread emails, and classifies them as **Safe** or **Phishing** using a hybrid of **Heuristic + Local LLM (Ollama Mistral)**.
+> ⚡ A **local, privacy-first phishing detector** that connects to Gmail using OAuth2, scans unread emails In real time, and classifies them as **Safe** or **Phishing** using a hybrid of **Heuristic + Local LLM (Ollama Mistral)**.
 
 ---
 
@@ -39,5 +39,9 @@
 
 ---
 
-## 🧾 Example Output
+## Diagram
+
+<img width="900" height="660" alt="Real-time Gmail Phishing Detection using LLM (Ollama Mistral + Gmail API OAuth2) - visual selection" src="https://github.com/user-attachments/assets/cdf61578-8a5c-403b-8b33-a33b50f68611" />
+
+
 
