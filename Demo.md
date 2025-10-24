@@ -22,6 +22,9 @@ A simple demo README showcasing example emails and the Mistral LLM scan results.
 
 ![Scan results - suspicious mail](https://github.com/user-attachments/assets/5f5fe0ac-3957-44f9-9bfb-ab89d20b66b3)
 
+
+<img width="895" height="382" alt="Screenshot 2025-10-24 140845" src="https://github.com/user-attachments/assets/7aae3596-e16d-4a94-953f-e1ab5c36f903" />
+
 ---
 
 ## View in Gmail app
