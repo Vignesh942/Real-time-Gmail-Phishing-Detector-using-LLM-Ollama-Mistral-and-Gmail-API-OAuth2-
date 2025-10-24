@@ -83,6 +83,8 @@ Everything runs offline after setup — **no cloud services** or data sharing.
 5. **Exit**
    - Graceful shutdown with final stats summary.
    - (Optional) Generates daily report with accuracy and trends.
+  
+<img width="900" height="660" alt="Real-time Gmail Phishing Detection using LLM (Ollama Mistral + Gmail API OAuth2) - visual selection" src="https://github.com/user-attachments/assets/7d9adfa1-811f-4dfc-a796-db282ba19c7a" />
 
 ---
 
@@ -93,6 +95,7 @@ This tool gives you **control, transparency, and privacy** — powered by **loca
 
 Perfect for developers, security enthusiasts, how wants privacy.
 
+## Check out the Demo for more Information!!
 ---
 
 
