@@ -1,20 +1,32 @@
-## Gmail Phishing Dectector using LLm ollama mistral with Gmail APi 
+# Gmail Phishing Detector — LLM (Ollama Mistral) + Gmail API
 
-
-
-## Normal Mail with no suspicious elements
-<img width="549" height="176" alt="Screenshot 2025-10-23 221552" src="https://github.com/user-attachments/assets/c6ad5e4f-86ce-4db7-88e7-01e108cc3b8f" />
-
-## The Scan results of Mistral LLM
-<img width="803" height="372" alt="Screenshot 2025-10-23 221433" src="https://github.com/user-attachments/assets/df84007c-e718-4e1c-b694-42c6d1158678" />
+A simple demo README showcasing example emails and the Mistral LLM scan results.
 
 ---
 
-## Suspicoius Mail
-<img width="665" height="190" alt="Screenshot 2025-10-23 221614" src="https://github.com/user-attachments/assets/f8d7b690-e84e-441a-a9e6-ce9e17a5dd52" />
+## Normal mail (no suspicious elements)
 
-## The Scan results of Mistral LLM
-<img width="1659" height="518" alt="Screenshot 2025-10-23 221509" src="https://github.com/user-attachments/assets/03ceb77b-8b0e-433e-a978-a71926e35d49" />
+![Normal mail screenshot](https://github.com/user-attachments/assets/b60adc1f-1fc5-4aea-be68-3dbdfd1804ed)
 
-## View In Gmail App
-<img width="1211" height="110" alt="Screenshot 2025-10-23 222456" src="https://github.com/user-attachments/assets/20dcebde-b487-45a1-8033-320087b5dc9d" />
+**Mistral LLM — Scan results (normal mail)**
+
+![Scan results - normal mail](https://github.com/user-attachments/assets/f4a67fad-fa55-45f8-9b2e-f5c158f4dbdd)
+
+---
+
+## Suspicious mail
+
+![Suspicious mail screenshot](https://github.com/user-attachments/assets/5c8626ac-c3b4-4cd8-ac0d-f1fa8b231498)
+
+**Mistral LLM — Scan results (suspicious mail)**
+
+![Scan results - suspicious mail](https://github.com/user-attachments/assets/5f5fe0ac-3957-44f9-9bfb-ab89d20b66b3)
+
+---
+
+## View in Gmail app
+
+![Gmail app view 1](https://github.com/user-attachments/assets/243f29a5-5913-4309-a4b1-d4dc543a8bf0)  
+![Gmail app header](https://github.com/user-attachments/assets/ff6fb755-df68-4b46-ba5b-f35f77abd859)  
+![Gmail app small view](https://github.com/user-attachments/assets/89ccd46d-7ef4-427e-8c1b-6691740d0e61)
+EOF
