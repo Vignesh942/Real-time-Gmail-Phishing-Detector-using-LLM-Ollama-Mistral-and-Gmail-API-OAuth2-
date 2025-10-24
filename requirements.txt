@@ -1,0 +1,18 @@
+
+# Data handling
+pandas>=2.0.0
+
+# Gmail API
+google-api-python-client>=2.95.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
+
+# Local LLM (Ollama)
+ollama>=0.1.0
+
+# Notifications (Windows)
+win10toast>=0.9
+plyer>=2.0.0
+
+# Utilities
+requests>=2.31.0
