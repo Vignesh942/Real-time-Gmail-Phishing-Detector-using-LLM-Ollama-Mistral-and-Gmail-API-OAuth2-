@@ -7,6 +7,8 @@
 Gmail Phishing Detection Daemon 
 Modify the script according to your needs
 Note : Most of this script is created by multiple LLM's 
+It contains heuristics.py, gmail_utils.py, ollama_client.py, config.json, credentials.json, token.json
+
 """
 
 import os
