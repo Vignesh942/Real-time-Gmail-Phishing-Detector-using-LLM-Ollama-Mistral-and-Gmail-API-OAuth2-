@@ -1,99 +1,24 @@
-
-
-
-
-
-"""
-Gmail Phishing Detection Daemon 
-Modify the script according to your needs
-Note : Most of this script is created by multiple LLM's 
-It contains heuristics , gmail_utils, ollama_client , config , credentials, token.
-
-"""
+# phishing_detector.py
+# Main Python script (runs the detector)
 
 import os
 import time
-import base64
-import re
-import pickle
-import json
 import sys
 import platform
-from email import message_from_bytes
-from typing import Tuple, Dict, List, Optional, Set
-from dataclasses import dataclass, asdict
+import json
+import pandas as pd
 from datetime import datetime, timedelta
 from collections import defaultdict
+from typing import Tuple, Dict, List, Optional, Set
+from dataclasses import dataclass, asdict
 
-import pandas as pd  
-from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from google.auth.exceptions import RefreshError  # Added for token refresh errors
-from ollama import Client
+from heuristics import HeuristicAnalyzer, URLAnalyzer
+from gmail_utils import GmailService
+from ollama_client import LLMAnalyzer
 
-
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-
-class Config:
-    """Application configuration"""
-    CREDENTIALS_FILE = "Yourcredentials.json_name"
-    TOKEN_FILE = "token.pickle"
-    SCOPES = [""]
-    
-    OLLAMA_MODEL = "dolphin-mistral" # You can use any LLM
-    LOG_CSV = "gmail_phish_log.csv" # Logs the Scan results in this csv file
-    PROCESSED_LABEL = "Processed-By-Ollama"
-    PHISHING_LABEL = "⚠️-Phishing-Alert"
-    SAFE_LABEL = "✓-Verified-Safe"
-    POLL_INTERVAL_SECS = 20         # scans Gmail inbox in real time for every 20 secs
-    
-    # Heuristic thresholds
-    HEURISTIC_THRESHOLD = 0.5
-    LLM_SKIP_THRESHOLD = 0.08
-    
-    # Advanced features
-    AUTO_QUARANTINE = True
-    WHITELIST_FILE = "trusted_senders.txt"
-    BLACKLIST_FILE = "blocked_senders.txt"
-    STATS_FILE = "detection_stats.json"
-    ENABLE_NOTIFICATIONS = False
-    ENABLE_EMAIL_REPORTS = False
-    REPORT_EMAIL = "your-email@gmail.com"
-    
-    # Machine Learning
-    ENABLE_LEARNING = True
-    TRAINING_DATA_FILE = "training_data.csv"
-    
-    # Improved URL pattern to handle more edge cases
-    URL_PATTERN = re.compile(r'https?://[^\s<>"\'\)]+|www\.[^\s<>"\'\)]+')
-    
-    URGENT_KEYWORDS = [
-        "urgent", "immediately", "asap", "suspend", "suspended",
-        "verify", "verify your", "click here", "update", 
-        "expired", "act now", "confirm", "secure your account"
-    ]
-    SENSITIVE_INFO_KEYWORDS = [
-        "password", "account number", "ssn", "social security", 
-        "card", "cvv", "pin", "bank details", "credit card"
-    ]
-    PHISHING_INDICATORS = [
-        "phish", "suspicious", "malicious", "scam", "fraud", "fake"
-    ]
-    SAFE_INDICATORS = [
-        "legitimate", "safe", "authentic", "genuine", "valid"
-    ]
-    
-    # Added retry configuration
-    MAX_RETRIES = 3
-    RETRY_DELAY = 2  # seconds
-
-
-# ============================================================================
-# DATA MODELS
-# ============================================================================
+# Note: config.json should be loaded here
+with open('config.json', 'r') as f:
+    config_data = json.load(f)
 
 @dataclass
 class EmailData:
@@ -139,9 +64,55 @@ class AnalysisResult:
         return self.final_label == "phishing"
 
 
-# ============================================================================
-# CONSOLE OUTPUT UTILITIES
-# ============================================================================
+class Config:
+    """Application configuration loaded from JSON"""
+    def __init__(self):
+        self.CREDENTIALS_FILE = config_data.get("CREDENTIALS_FILE", "Yourcredentials.json_name")
+        self.TOKEN_FILE = config_data.get("TOKEN_FILE", "token.pickle")
+        self.SCOPES = config_data.get("SCOPES", [])
+        
+        self.OLLAMA_MODEL = config_data.get("OLLAMA_MODEL", "dolphin-mistral")
+        self.LOG_CSV = config_data.get("LOG_CSV", "gmail_phish_log.csv")
+        self.PROCESSED_LABEL = config_data.get("PROCESSED_LABEL", "Processed-By-Ollama")
+        self.PHISHING_LABEL = config_data.get("PHISHING_LABEL", "⚠️-Phishing-Alert")
+        self.SAFE_LABEL = config_data.get("SAFE_LABEL", "✓-Verified-Safe")
+        self.POLL_INTERVAL_SECS = config_data.get("POLL_INTERVAL_SECS", 20)
+        
+        self.HEURISTIC_THRESHOLD = config_data.get("HEURISTIC_THRESHOLD", 0.5)
+        self.LLM_SKIP_THRESHOLD = config_data.get("LLM_SKIP_THRESHOLD", 0.08)
+        
+        self.AUTO_QUARANTINE = config_data.get("AUTO_QUARANTINE", True)
+        self.WHITELIST_FILE = config_data.get("WHITELIST_FILE", "trusted_senders.txt")
+        self.BLACKLIST_FILE = config_data.get("BLACKLIST_FILE", "blocked_senders.txt")
+        self.STATS_FILE = config_data.get("STATS_FILE", "detection_stats.json")
+        self.ENABLE_NOTIFICATIONS = config_data.get("ENABLE_NOTIFICATIONS", False)
+        self.ENABLE_EMAIL_REPORTS = config_data.get("ENABLE_EMAIL_REPORTS", False)
+        self.REPORT_EMAIL = config_data.get("REPORT_EMAIL", "your-email@gmail.com")
+        
+        self.ENABLE_LEARNING = config_data.get("ENABLE_LEARNING", True)
+        self.TRAINING_DATA_FILE = config_data.get("TRAINING_DATA_FILE", "training_data.csv")
+        
+        self.URL_PATTERN = config_data.get("URL_PATTERN", r'https?://[^\s<>"\'\)]+|www\.[^\s<>"\'\)]+')
+        
+        self.URGENT_KEYWORDS = config_data.get("URGENT_KEYWORDS", [
+            "urgent", "immediately", "asap", "suspend", "suspended",
+            "verify", "verify your", "click here", "update", 
+            "expired", "act now", "confirm", "secure your account"
+        ])
+        self.SENSITIVE_INFO_KEYWORDS = config_data.get("SENSITIVE_INFO_KEYWORDS", [
+            "password", "account number", "ssn", "social security", 
+            "card", "cvv", "pin", "bank details", "credit card"
+        ])
+        self.PHISHING_INDICATORS = config_data.get("PHISHING_INDICATORS", [
+            "phish", "suspicious", "malicious", "scam", "fraud", "fake"
+        ])
+        self.SAFE_INDICATORS = config_data.get("SAFE_INDICATORS", [
+            "legitimate", "safe", "authentic", "genuine", "valid"
+        ])
+        
+        self.MAX_RETRIES = config_data.get("MAX_RETRIES", 3)
+        self.RETRY_DELAY = config_data.get("RETRY_DELAY", 2)
+
 
 class Console:
     """Colored console output"""
@@ -237,263 +208,6 @@ class Console:
         print("="*80 + "\n")
 
 
-# ============================================================================
-# GMAIL INTEGRATION
-# ============================================================================
-
-class GmailService:
-    """Handles Gmail API interactions with proper error handling"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        self.service = self._authenticate()
-        self.processed_label_id = self._get_or_create_label()
-        self._label_cache = {}  # FIXED: Cache to prevent race conditions
-    
-    def _authenticate(self):
-        """Authenticate with Gmail API with proper error handling"""
-        creds = None
-        
-        if os.path.exists(self.config.TOKEN_FILE):
-            try:
-                with open(self.config.TOKEN_FILE, "rb") as f:
-                    creds = pickle.load(f)
-            except Exception as e:
-                print(Console.yellow(f"Warning: Could not load token: {e}"))
-                creds = None
-        
-        # FIXED: Handle expired/invalid credentials properly
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                try:
-                    creds.refresh(Request())
-                except RefreshError:
-                    print(Console.yellow("Token refresh failed, re-authenticating..."))
-                    os.remove(self.config.TOKEN_FILE)
-                    creds = None
-            
-            if not creds:
-                if not os.path.exists(self.config.CREDENTIALS_FILE):
-                    raise FileNotFoundError(
-                        f"credentials.json not found! Please download it from Google Cloud Console."
-                    )
-                
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    self.config.CREDENTIALS_FILE, 
-                    self.config.SCOPES
-                )
-                creds = flow.run_local_server(port=0)
-            
-            with open(self.config.TOKEN_FILE, "wb") as f:
-                pickle.dump(creds, f)
-        
-        # Added cache_discovery=False to avoid intermittent issues
-        return build("gmail", "v1", credentials=creds, cache_discovery=False)
-    
-    def _get_or_create_label(self) -> str:
-        """Get or create the processed label"""
-        try:
-            labels_res = self.service.users().labels().list(userId="me").execute()
-            
-            for label in labels_res.get("labels", []):
-                if label.get("name") == self.config.PROCESSED_LABEL:
-                    return label["id"]
-            
-            label_body = {
-                "name": self.config.PROCESSED_LABEL,
-                "labelListVisibility": "labelShow",
-                "messageListVisibility": "show"
-            }
-            
-            created = self.service.users().labels().create(
-                userId="me", 
-                body=label_body
-            ).execute()
-            
-            return created["id"]
-        except Exception as e:
-            print(Console.red(f"Error creating label: {e}"))
-            raise
-    
-    def get_label_id(self, label_name: str) -> str:
-        """Get or create a label and return its ID (with caching)"""
-        #  Added caching to prevent race conditions
-        if label_name in self._label_cache:
-            return self._label_cache[label_name]
-        
-        try:
-            labels_res = self.service.users().labels().list(userId="me").execute()
-            
-            for label in labels_res.get("labels", []):
-                if label.get("name") == label_name:
-                    self._label_cache[label_name] = label["id"]
-                    return label["id"]
-            
-            label_body = {
-                "name": label_name,
-                "labelListVisibility": "labelShow",
-                "messageListVisibility": "show"
-            }
-            
-            created = self.service.users().labels().create(
-                userId="me", 
-                body=label_body
-            ).execute()
-            
-            self._label_cache[label_name] = created["id"]
-            return created["id"]
-        except Exception as e:
-            print(Console.yellow(f"Warning: Could not get/create label {label_name}: {e}"))
-            return ""
-    
-    def fetch_latest_unread(self) -> Optional[str]:
-        """Fetch the most recent unread email with retry logic"""
-        # FIXED: Added retry logic for intermittent Gmail API issues
-        for attempt in range(self.config.MAX_RETRIES):
-            try:
-                result = self.service.users().messages().list(
-                    userId='me',
-                    q="is:unread category:primary",
-                    maxResults=5
-                ).execute()
-                
-                messages = result.get('messages', [])
-                if not messages:
-                    return None
-                
-                msgs_with_date = []
-                for msg in messages:
-                    msg_detail = self.service.users().messages().get(
-                        userId='me',
-                        id=msg['id'],
-                        format='metadata',
-                        metadataHeaders=['Date']  #  Only fetch needed headers
-                    ).execute()
-                    msgs_with_date.append((msg['id'], int(msg_detail['internalDate'])))
-                
-                latest_msg_id = max(msgs_with_date, key=lambda x: x[1])[0]
-                return latest_msg_id
-            
-            except Exception as e:
-                if attempt < self.config.MAX_RETRIES - 1:
-                    print(Console.yellow(f"Retry {attempt + 1}/{self.config.MAX_RETRIES}: {e}"))
-                    time.sleep(self.config.RETRY_DELAY)
-                else:
-                    print(Console.red(f"Failed to fetch messages after {self.config.MAX_RETRIES} attempts: {e}"))
-                    return None
-        
-        return None
-    
-    def parse_message(self, msg_id: str) -> EmailData:
-        """Parse email message and extract content"""
-        msg = self.service.users().messages().get(
-            userId="me",
-            id=msg_id,
-            format="raw"
-        ).execute()
-        
-        # : Handle base64 decoding properly
-        raw_bytes = base64.urlsafe_b64decode(msg["raw"].replace('-', '+').replace('_', '/'))
-        email_msg = message_from_bytes(raw_bytes)
-        
-        subject = email_msg.get("Subject", "")
-        sender = email_msg.get("From", "")
-        body = self._extract_body(email_msg)
-        snippet = body[:1000] if body else ""
-        
-        return EmailData(
-            msg_id=msg_id,
-            subject=subject,
-            body=body,
-            sender=sender,
-            snippet=snippet
-        )
-    
-    def _extract_body(self, email_msg) -> str:
-        """Extract email body text"""
-        body = ""
-        
-        if email_msg.is_multipart():
-            for part in email_msg.walk():
-                content_type = part.get_content_type()
-                disposition = str(part.get("Content-Disposition", ""))
-                
-                if content_type == "text/plain" and "attachment" not in disposition:
-                    try:
-                        body = part.get_payload(decode=True).decode(errors="ignore")
-                        break
-                    except:
-                        body = str(part.get_payload())
-                        break
-            
-            if not body:
-                for part in email_msg.walk():
-                    if part.get_content_type() == "text/html":
-                        try:
-                            body = part.get_payload(decode=True).decode(errors="ignore")
-                            break
-                        except:
-                            body = str(part.get_payload())
-                            break
-        else:
-            try:
-                body = email_msg.get_payload(decode=True).decode(errors="ignore")
-            except:
-                body = str(email_msg.get_payload())
-        
-        return body
-    
-    def mark_as_processed(self, msg_id: str):
-        """Mark message as processed"""
-        try:
-            body = {
-                "removeLabelIds": ["UNREAD"],
-                "addLabelIds": [self.processed_label_id]
-            }
-            self.service.users().messages().modify(
-                userId="me",
-                id=msg_id,
-                body=body
-            ).execute()
-        except Exception as e:
-            print(Console.yellow(f"Warning: Could not mark as processed: {e}"))
-    
-    def apply_label(self, msg_id: str, label_name: str):
-        """Apply a specific label to a message"""
-        try:
-            label_id = self.get_label_id(label_name)
-            if label_id:
-                body = {"addLabelIds": [label_id]}
-                self.service.users().messages().modify(
-                    userId="me",
-                    id=msg_id,
-                    body=body
-                ).execute()
-        except Exception as e:
-            print(Console.yellow(f"Warning: Could not apply label: {e}"))
-    
-    def move_to_spam(self, msg_id: str):
-        """Move message to trash"""
-        try:
-            self.service.users().messages().trash(
-                userId="me",
-                id=msg_id
-            ).execute()
-        except Exception as e:
-            print(Console.yellow(f"Warning: Could not move to trash: {e}"))
-    
-    def extract_sender_email(self, sender: str) -> str:
-        """Extract email address from sender field"""
-        match = re.search(r'<(.+?)>', sender)
-        if match:
-            return match.group(1).lower()
-        return sender.lower()
-
-
-# ============================================================================
-# WHITELIST/BLACKLIST MANAGER
-# ============================================================================
-
 class ListManager:
     """Manages trusted and blocked sender lists"""
     
@@ -549,15 +263,12 @@ class ListManager:
     
     def _extract_email(self, sender: str) -> str:
         """Extract email from sender string"""
+        import re
         match = re.search(r'<(.+?)>', sender)
         if match:
             return match.group(1).lower()
         return sender.lower()
 
-
-# ============================================================================
-# STATISTICS TRACKER
-# ============================================================================
 
 class StatsTracker:
     """Tracks detection statistics"""
@@ -657,363 +368,6 @@ class StatsTracker:
         return summary
 
 
-# ============================================================================
-# URL ANALYZER
-# ============================================================================
-
-class URLAnalyzer:
-    """Advanced URL analysis for phishing detection"""
-    
-    SUSPICIOUS_TLDS = ['.tk', '.ml', '.ga', '.cf', '.gq', '.xyz', '.top']
-    TRUSTED_DOMAINS = ['google.com', 'microsoft.com', 'apple.com', 'amazon.com']
-    
-    @staticmethod
-    def extract_urls(text: str) -> List[str]:
-        """Extract all URLs from text"""
-        url_pattern = re.compile(r'https?://[^\s<>"\'\)]+|www\.[^\s<>"\'\)]+')
-        return url_pattern.findall(text)
-    
-    @staticmethod
-    def is_suspicious_url(url: str) -> Tuple[bool, str]:
-        """Check if URL is suspicious"""
-        reasons = []
-        
-        if any(url.endswith(tld) for tld in URLAnalyzer.SUSPICIOUS_TLDS):
-            reasons.append("Suspicious TLD")
-        
-        ip_pattern = re.compile(r'https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}')
-        if ip_pattern.match(url):
-            reasons.append("Uses IP address")
-        
-        shorteners = ['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly']
-        if any(short in url for short in shorteners):
-            reasons.append("URL shortener")
-        
-        domain_part = url.split('//')[1].split('/')[0] if '//' in url else url
-        if domain_part.count('.') > 3:
-            reasons.append("Too many subdomains")
-        
-        suspicious_chars = ['р', 'а', 'с', 'о', 'е', 'х']
-        if any(char in url for char in suspicious_chars):
-            reasons.append("Homograph attack")
-        
-        return (len(reasons) > 0, ", ".join(reasons) if reasons else "")
-    
-    @staticmethod
-    def get_domain(url: str) -> str:
-        """Extract domain from URL"""
-        try:
-            if '//' in url:
-                domain = url.split('//')[1].split('/')[0]
-            else:
-                domain = url.split('/')[0]
-            return domain
-        except:
-            return url
-
-
-# ============================================================================
-# REST OF THE CODE (HeuristicAnalyzer, LLMAnalyzer, etc.)
-# ============================================================================
-
-class HeuristicAnalyzer:
-    """Analyzes emails using heuristic rules"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        self.url_analyzer = URLAnalyzer()
-    
-    def analyze(self, email: EmailData) -> HeuristicResult:
-        """Perform heuristic analysis on email"""
-        score = 0.0
-        reasons = []
-        details = {}
-        
-        text_lower = email.full_text.lower()
-        
-        urls = self.url_analyzer.extract_urls(email.full_text)
-        if urls:
-            details['has_url'] = True
-            details['url_count'] = len(urls)
-            score += 0.25
-            
-            suspicious_count = 0
-            for url in urls:
-                is_sus, reason = self.url_analyzer.is_suspicious_url(url)
-                if is_sus:
-                    suspicious_count += 1
-                    score += 0.15
-            
-            if suspicious_count > 0:
-                details['suspicious_urls'] = suspicious_count
-                reasons.append("SUSPICIOUS_URL")
-            else:
-                reasons.append("URL")
-        else:
-            details['has_url'] = False
-        
-        if any(kw in text_lower for kw in self.config.URGENT_KEYWORDS):
-            score += 0.18
-            if not reasons:
-                reasons.append("URGENT")
-            details['has_urgency'] = True
-        else:
-            details['has_urgency'] = False
-        
-        if any(kw in text_lower for kw in self.config.SENSITIVE_INFO_KEYWORDS):
-            score += 0.20
-            if not reasons:
-                reasons.append("ASKS_INFO")
-            details['asks_info'] = True
-        else:
-            details['asks_info'] = False
-        
-        suspicious_words = ["urgent", "verify", "payment", "reset", "suspended"]
-        if (len(email.subject.strip()) < 20 and 
-            any(w in email.subject.lower() for w in suspicious_words)):
-            score += 0.12
-            if not reasons:
-                reasons.append("SHORT_SUBJ")
-            details['short_suspicious_subject'] = True
-        else:
-            details['short_suspicious_subject'] = False
-        
-        misspellings = ['acount', 'verifiy', 'urgnt', 'immediatly', 'suspened']
-        if any(word in text_lower for word in misspellings):
-            score += 0.10
-            details['has_misspellings'] = True
-        else:
-            details['has_misspellings'] = False
-        
-        score = min(round(score, 4), 1.0)
-        reason = reasons[0] if reasons else "NONE"
-        
-        return HeuristicResult(score=score, reason=reason, details=details)
-
-
-# ============================================================================
-# LLM ANALYZER 
-# ============================================================================
-
-class LLMAnalyzer:
-    """Analyzes emails using Ollama LLM"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        try:
-            self.client = Client()
-        except Exception as e:
-            print(Console.red(f"Error initializing Ollama client: {e}"))
-            self.client = None
-    
-    def analyze(self, email: EmailData) -> LLMResult:
-        """Perform LLM analysis on email"""
-        # Check if client is available
-        if self.client is None:
-            return self._fallback_analysis("Ollama client not available")
-        
-        prompt = self._build_prompt(email)
-        
-        try:
-            response = self.client.chat(
-                model=self.config.OLLAMA_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                stream=False,
-                options={
-                    "temperature": 0.1,
-                    "num_predict": 150,
-                }
-            )
-            
-            text = self._extract_response_text(response)
-            
-            print(Console.cyan(f"🤖 LLM Raw Response: {text[:200]}"))
-            
-            return self._parse_response(text)
-            
-        except Exception as e:
-            print(Console.yellow(f"⚠ LLM error: {e}"))
-            return self._fallback_analysis(str(e))
-    
-    def _build_prompt(self, email: EmailData) -> str:
-        """Build analysis prompt for LLM"""
-        return f"""Analyze this email for phishing. Respond with ONLY valid JSON, nothing else.
-
-Subject: {email.subject}
-Content: {email.snippet}
-
-Required JSON format (copy exactly):
-{{"label": "phishing", "reason": "why suspicious", "score": 8, "recommendation": "do not click links"}}
-
-OR if safe:
-{{"label": "safe", "reason": "appears legitimate", "score": 3, "recommendation": "no action needed"}}
-
-Your JSON response:"""
-    
-    def _extract_response_text(self, response) -> str:
-        """Extract text from Ollama response"""
-        if isinstance(response, dict):
-            return response.get("message", {}).get("content", "")
-        return str(response)
-    
-    def _parse_response(self, text: str) -> LLMResult:
-        """Parse LLM JSON response"""
-        text = re.sub(r'```json\s*', '', text)
-        text = re.sub(r'```\s*', '', text)
-        text = text.strip()
-        
-        start = text.find("{")
-        end = text.rfind("}") + 1
-        
-        if start == -1 or end == 0:
-            return self._fallback_analysis(text)
-        
-        json_text = text[start:end]
-        json_text = (
-            json_text
-            .replace("'", '"')
-            .replace("\n", " ")
-            .replace("\r", " ")
-            .replace("\t", " ")
-        )
-        json_text = re.sub(r',\s*}', '}', json_text)
-        json_text = re.sub(r',\s*]', ']', json_text)
-        
-        try:
-            data = json.loads(json_text)
-            
-            label = str(data.get("label", "safe")).lower().strip()
-            if "phish" in label:
-                label = "phishing"
-            elif "safe" in label or "legitimate" in label:
-                label = "safe"
-            else:
-                label = "safe"
-            
-            reason = str(data.get("reason", "No reason provided")).strip()
-            score = max(1, min(10, float(data.get("score", 5))))
-            recommendation = str(data.get("recommendation", "Review manually")).strip()
-            
-            return LLMResult(
-                label=label,
-                reason=reason,
-                score=score,
-                recommendation=recommendation
-            )
-            
-        except json.JSONDecodeError as e:
-            print(Console.yellow(f"JSON parse error: {e}"))
-            return self._fallback_analysis(text)
-    
-    def _fallback_analysis(self, text: str) -> LLMResult:
-        """Fallback analysis when JSON parsing fails"""
-        text_lower = text.lower()
-        
-        phishing_count = sum(
-            1 for word in self.config.PHISHING_INDICATORS 
-            if word in text_lower
-        )
-        safe_count = sum(
-            1 for word in self.config.SAFE_INDICATORS 
-            if word in text_lower
-        )
-        
-        if phishing_count > safe_count:
-            return LLMResult(
-                label="phishing",
-                reason="LLM indicated suspicious content (JSON parse failed)",
-                score=7.0,
-                recommendation="Manual review recommended"
-            )
-        else:
-            return LLMResult(
-                label="safe",
-                reason="LLM analysis unclear (JSON parse failed)",
-                score=3.0,
-                recommendation="Manual review recommended"
-            )
-
-
-# ============================================================================
-# ANALYSIS COORDINATOR
-# ============================================================================
-
-class PhishingDetector:
-    """Coordinates analysis and determines final verdict"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        self.heuristic_analyzer = HeuristicAnalyzer(config)
-        self.llm_analyzer = LLMAnalyzer(config)
-        self.list_manager = ListManager(config)
-    
-    def analyze(self, email: EmailData) -> AnalysisResult:
-        """Perform complete analysis on email"""
-        if self.list_manager.is_whitelisted(email.sender):
-            return self._create_whitelisted_result(email)
-        
-        if self.list_manager.is_blacklisted(email.sender):
-            return self._create_blacklisted_result(email)
-        
-        heuristic_result = self.heuristic_analyzer.analyze(email)
-        
-        llm_result = None
-        if heuristic_result.score >= self.config.LLM_SKIP_THRESHOLD:
-            llm_result = self.llm_analyzer.analyze(email)
-        
-        final_label = self._determine_label(heuristic_result, llm_result)
-        
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        return AnalysisResult(
-            email=email,
-            heuristic=heuristic_result,
-            llm=llm_result,
-            final_label=final_label,
-            timestamp=timestamp
-        )
-    
-    def _create_whitelisted_result(self, email: EmailData) -> AnalysisResult:
-        """Create result for whitelisted sender"""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        return AnalysisResult(
-            email=email,
-            heuristic=HeuristicResult(score=0.0, reason="WHITELISTED", details={}),
-            llm=None,
-            final_label="safe",
-            timestamp=timestamp
-        )
-    
-    def _create_blacklisted_result(self, email: EmailData) -> AnalysisResult:
-        """Create result for blacklisted sender"""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        return AnalysisResult(
-            email=email,
-            heuristic=HeuristicResult(score=1.0, reason="BLACKLISTED", details={}),
-            llm=None,
-            final_label="phishing",
-            timestamp=timestamp
-        )
-    
-    def _determine_label(
-        self, 
-        heuristic: HeuristicResult, 
-        llm: Optional[LLMResult]
-    ) -> str:
-        """Determine final phishing/safe label"""
-        if llm and llm.label == "phishing":
-            return "phishing"
-        
-        if heuristic.score >= self.config.HEURISTIC_THRESHOLD:
-            return "phishing"
-        
-        return "safe"
-
-
-# ============================================================================
-# LOGGER
-# ============================================================================
-
 class Logger:
     """Logs analysis results to CSV"""
     
@@ -1059,10 +413,6 @@ class Logger:
             print(Console.yellow(f"Logging error: {e}"))
 
 
-# ============================================================================
-# NOTIFICATION SYSTEM (FIXED)
-# ============================================================================
-
 class NotificationSystem:
     """Send notifications for phishing detections"""
     
@@ -1088,7 +438,6 @@ class NotificationSystem:
         try:
             system = platform.system()
             
-            # FIXED: Properly escape quotes for shell commands
             title_escaped = title.replace('"', '\\"')
             message_escaped = message.replace('"', '\\"')
             
@@ -1106,10 +455,6 @@ class NotificationSystem:
         except:
             pass
 
-
-# ============================================================================
-# REPORT GENERATOR (FIXED)
-# ============================================================================
 
 class ReportGenerator:
     """Generate email reports and summaries"""
@@ -1162,7 +507,6 @@ Report generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     def _get_top_indicators(self) -> str:
         """Get top phishing indicators from recent detections"""
         try:
-            # FIXED: Check if file exists before reading
             if not os.path.exists(self.config.LOG_CSV):
                 return "No data yet"
             
@@ -1197,10 +541,6 @@ Report generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         except Exception as e:
             print(Console.red(f"Error saving report: {e}"))
 
-
-# ============================================================================
-# COMMAND HANDLER (FIXED - Now properly integrated)
-# ============================================================================
 
 class CommandHandler:
     """Handles interactive commands during monitoring"""
@@ -1273,10 +613,6 @@ Press Ctrl+C to stop the daemon
         """
         print(Console.cyan(help_text))
 
-
-# ============================================================================
-# MAIN DAEMON
-# ============================================================================
 
 class PhishingDaemon:
     """Main daemon that monitors Gmail inbox"""
@@ -1356,10 +692,6 @@ class PhishingDaemon:
         print(Console.blue("   [Enter] Continue monitoring\n"))
 
 
-# ============================================================================
-# ENHANCED DAEMON (FIXED)
-# ============================================================================
-
 class EnhancedPhishingDaemon(PhishingDaemon):
     """Enhanced daemon with interactive features"""
     
@@ -1368,6 +700,7 @@ class EnhancedPhishingDaemon(PhishingDaemon):
         self.notification_system = NotificationSystem(config)
         self.report_generator = ReportGenerator(config, self.stats)
         self.last_result = None
+        self.command_handler = CommandHandler(self)
     
     def run(self):
         """Run the enhanced monitoring daemon"""
@@ -1428,6 +761,14 @@ class EnhancedPhishingDaemon(PhishingDaemon):
             self.gmail.mark_as_processed(msg_id)
             self._show_quick_actions(result)
             
+            # Interactive command input (simplified; in full impl, use select or threading for non-blocking)
+            try:
+                cmd = input("Enter command (w/b/f/r/s/help/enter): ").strip()
+                if cmd:
+                    self.command_handler.handle_command(cmd, result)
+            except:
+                pass  # Continue on input error
+            
         except Exception as e:
             print(Console.red(f"Error processing email: {e}"))
     
@@ -1439,41 +780,89 @@ class EnhancedPhishingDaemon(PhishingDaemon):
         print(self.stats.get_summary())
         print(self.stats.get_daily_summary())
         
-        # FIXED: Proper cross-platform input handling
         print(Console.cyan("\n💾 Generate full report? (y/n): "), end="", flush=True)
         try:
-            # Try to get input in a cross-platform way
-            if platform.system() != "Windows":
-                # Unix-like systems
-                try:
-                    import tty
-                    import termios
-                    fd = sys.stdin.fileno()
-                    old_settings = termios.tcgetattr(fd)
-                    try:
-                        tty.setraw(sys.stdin.fileno())
-                        choice = sys.stdin.read(1).lower()
-                    finally:
-                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                except:
-                    choice = input().lower()
-            else:
-                # Windows
-                import msvcrt
-                choice = msvcrt.getch().decode('utf-8').lower()
-            
+            choice = input().lower()
             if choice == 'y':
                 self.report_generator.save_report()
-        except Exception as e:
-            print(Console.yellow(f"\nCould not get input: {e}"))
+        except:
+            pass
         
         print(Console.yellow("="*80))
         print(Console.yellow("\n👋 Daemon stopped. Stay safe online!"))
 
 
-# ============================================================================
-# ENTRY POINT
-# ============================================================================
+class PhishingDetector:
+    """Coordinates analysis and determines final verdict"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.heuristic_analyzer = HeuristicAnalyzer(config)
+        self.llm_analyzer = LLMAnalyzer(config)
+        self.list_manager = ListManager(config)
+    
+    def analyze(self, email: EmailData) -> AnalysisResult:
+        """Perform complete analysis on email"""
+        if self.list_manager.is_whitelisted(email.sender):
+            return self._create_whitelisted_result(email)
+        
+        if self.list_manager.is_blacklisted(email.sender):
+            return self._create_blacklisted_result(email)
+        
+        heuristic_result = self.heuristic_analyzer.analyze(email)
+        
+        llm_result = None
+        if heuristic_result.score >= self.config.LLM_SKIP_THRESHOLD:
+            llm_result = self.llm_analyzer.analyze(email)
+        
+        final_label = self._determine_label(heuristic_result, llm_result)
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        return AnalysisResult(
+            email=email,
+            heuristic=heuristic_result,
+            llm=llm_result,
+            final_label=final_label,
+            timestamp=timestamp
+        )
+    
+    def _create_whitelisted_result(self, email: EmailData) -> AnalysisResult:
+        """Create result for whitelisted sender"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return AnalysisResult(
+            email=email,
+            heuristic=HeuristicResult(score=0.0, reason="WHITELISTED", details={}),
+            llm=None,
+            final_label="safe",
+            timestamp=timestamp
+        )
+    
+    def _create_blacklisted_result(self, email: EmailData) -> AnalysisResult:
+        """Create result for blacklisted sender"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return AnalysisResult(
+            email=email,
+            heuristic=HeuristicResult(score=1.0, reason="BLACKLISTED", details={}),
+            llm=None,
+            final_label="phishing",
+            timestamp=timestamp
+        )
+    
+    def _determine_label(
+        self, 
+        heuristic: HeuristicResult, 
+        llm: Optional[LLMResult]
+    ) -> str:
+        """Determine final phishing/safe label"""
+        if llm and llm.label == "phishing":
+            return "phishing"
+        
+        if heuristic.score >= self.config.HEURISTIC_THRESHOLD:
+            return "phishing"
+        
+        return "safe"
+
 
 def main():
     """Application entry point"""
