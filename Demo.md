@@ -1,6 +1,6 @@
 # A Real Time-Gmail Phishing Detector — LLM (Ollama Mistral) + Gmail API
 
-A simple demo README showcasing example emails and the Mistral LLM scan results.
+A simple demo showcasing example emails and the Mistral LLM scan results.
 
 ---
 
