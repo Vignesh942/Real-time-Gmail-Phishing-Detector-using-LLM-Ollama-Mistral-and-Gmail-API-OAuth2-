@@ -30,8 +30,9 @@ A simple demo showcasing example emails and the Mistral LLM scan results.
 ## View in Gmail app
 
 ![Gmail app view 1](https://github.com/user-attachments/assets/243f29a5-5913-4309-a4b1-d4dc543a8bf0)  
-![Gmail app header](https://github.com/user-attachments/assets/ff6fb755-df68-4b46-ba5b-f35f77abd859)  
-![Gmail app small view](https://github.com/user-attachments/assets/89ccd46d-7ef4-427e-8c1b-6691740d0e61)
+
+<img width="1578" height="705" alt="Screenshot 2025-10-26 144036" src="https://github.com/user-attachments/assets/be9a7d7f-a66b-4cc2-89bf-030508bf3baf" />
+<img width="1578" height="725" alt="Screenshot 2025-10-26 144055" src="https://github.com/user-attachments/assets/28ba76b1-3471-40b0-90e8-7ff50bfff889" />
 
 ---
 
